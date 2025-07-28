@@ -4,4 +4,4 @@ Experimentals 3D nuclear microreactors models written during the participation i
 
 A Hackathon promoted by Nuclear Trade & Technology Exchange (https://nt2e.org)
 
-Link: https://nuclear-microreactor-calc-v1.streamlit.app/
+Link:[ https://nuclear-microreactor-calc-v1.streamlit.app/](https://jullyanolino.github.io/nuclear-microreactor-3dmodels/u-battery_model-v1.html)
