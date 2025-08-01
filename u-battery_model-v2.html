@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>U-Battery - Enhanced Model</title>
+  <style>
+    body { 
+      margin: 0; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1e3c72, #2a5298);
+      color: white;
+      overflow: hidden;
+    }
+    canvas { 
+      display: block; 
+      width: 100%; 
+      height: 100vh; 
+    }
+    #controls {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 20px;
+      border-radius: 12px;
+      min-width: 220px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    button {
+      display: block;
+      width: 100%;
+      margin: 8px 0;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #00ff88, #00cc6a);
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 10px rgba(0, 255, 136, 0.3);
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, #3498db, #2980b9);
+      box-shadow: 0 2px 10px rgba(52, 152, 219, 0.3);
+    }
+    button.secondary:hover {
+      box-shadow: 0 4px 20px rgba(52, 152, 219, 0.4);
+    }
+    #info {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 350px;
+      display: none;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    select {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      font-size: 14px;
+    }
+    select option {
+      background: #1a1a2e;
+      color: white;
+    }
+    #crossSectionControls {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .slider-container {
+      margin: 10px 0;
+    }
+    .slider-container label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.2);
+      outline: none;
+      -webkit-appearance: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #00ff88;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 255, 136, 0.4);
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-left: 8px;
+      background: #ff4444;
+    }
+    .status-indicator.active {
+      background: #00ff88;
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.6);
+    }
+    h3 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-size: 16px;
+    }
+    .component-stats {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <h3>🔬 U-Battery Controls</h3>
+    <button onclick="resetCamera()">🎯 Reset Camera</button>
+    <button class="secondary" onclick="toggleWireframe()">📐 Toggle Wireframe</button>
+    <select id="componentSelect" onchange="selectComponent(this.value)">
+      <option value="">Selecione um componente...</option>
+    </select>
+    <button onclick="toggleAnimation()">
+      <span id="animBtn">▶️ Start Animation</span>
+      <span class="status-indicator" id="animStatus"></span>
+    </button>
+    
+    <div id="crossSectionControls">
+      <button class="secondary" onclick="toggleCrossSection()">
+        <span id="crossBtn">✂️ Enable Cross-Section</span>
+      </button>
+      <div class="slider-container">
+        <label>Cross-Section Position</label>
+        <input type="range" id="crossSlider" min="-5" max="5" value="0" step="0.1" onchange="updateCrossSection(this.value)">
+      </div>
+      <div class="slider-container">
+        <label>Section Orientation</label>
+        <input type="range" id="orientSlider" min="0" max="360" value="0" step="10" onchange="updateOrientation(this.value)">
+      </div>
+    </div>
+  </div>
+
+  <div id="info">
+    <h3 id="infoTitle">Componente</h3>
+    <p id="infoDesc">Clique em um componente para ver informações.</p>
+    <div class="component-stats" id="componentStats"></div>
+    <button onclick="closeInfo()">✖️ Fechar</button>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // Enhanced Variables
+    let scene, camera, renderer, controls;
+    let components = {};
+    let componentGroups = {};
+    let selectedObject = null;
+    let animationRunning = false;
+    let wireframeMode = false;
+    let crossSectionEnabled = false;
+    let clippingPlanes = [];
+    let animationMixers = [];
+    let particleSystems = [];
+
+    // Initialize
+    init();
+    createEnhancedUBatteryModel();
+    animate();
+
+    function init() {
+      // Scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0a1a);
+
+      // Camera with better positioning
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(12, 10, 12);
+
+      // Enhanced Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      document.body.appendChild(renderer.domElement);
+
+      // Enhanced Controls
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 2.5, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.minDistance = 5;
+      controls.maxDistance = 50;
+
+      // Enhanced Lighting Setup
+      setupLighting();
+
+      // Setup clipping planes
+      setupClippingPlanes();
+
+      // Events
+      window.addEventListener('resize', onWindowResize);
+      renderer.domElement.addEventListener('click', onMouseClick);
+      renderer.domElement.addEventListener('mousemove', onMouseMove);
+    }
+
+    function setupLighting() {
+      // Ambient light
+      const ambientLight = new THREE.AmbientLight(0x404060, 0.4);
+      scene.add(ambientLight);
+
+      // Main directional light
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+      directionalLight.position.set(20, 20, 10);
+      directionalLight.castShadow = true;
+      directionalLight.shadow.mapSize.width = 2048;
+      directionalLight.shadow.mapSize.height = 2048;
+      directionalLight.shadow.camera.near = 0.5;
+      directionalLight.shadow.camera.far = 100;
+      directionalLight.shadow.camera.left = -20;
+      directionalLight.shadow.camera.right = 20;
+      directionalLight.shadow.camera.top = 20;
+      directionalLight.shadow.camera.bottom = -20;
+      scene.add(directionalLight);
+
+      // Secondary directional light
+      const directionalLight2 = new THREE.DirectionalLight(0x4080ff, 0.3);
+      directionalLight2.position.set(-15, 10, -10);
+      scene.add(directionalLight2);
+
+      // Spot light for selected component highlighting
+      const spotLight = new THREE.SpotLight(0x00ff88, 0);
+      spotLight.position.set(0, 15, 0);
+      spotLight.angle = Math.PI / 6;
+      spotLight.penumbra = 0.3;
+      spotLight.decay = 2;
+      spotLight.distance = 100;
+      scene.add(spotLight);
+      window.highlightSpot = spotLight;
+    }
+
+    function setupClippingPlanes() {
+      // Main cross-section plane
+      const plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+      clippingPlanes.push(plane);
+      renderer.clippingPlanes = [];
+    }
+
+    function createEnhancedUBatteryModel() {
+      const mainGroup = new THREE.Group();
+      mainGroup.name = 'U_Battery_System';
+
+      // Create RPV with enhanced details
+      createRPV(mainGroup);
+      
+      // Create Reactor Core with TRISO representation
+      createReactorCore(mainGroup);
+      
+      // Create Enhanced IHX
+      createIHX(mainGroup);
+      
+      // Create Cross Vessel Duct
+      createCrossVesselDuct(mainGroup);
+      
+      // Create Helium Pump with impeller
+      createHeliumPump(mainGroup);
+      
+      // Create Control Drums
+      createControlDrums(mainGroup);
+      
+      // Create Turbine Generator
+      createTurbineGenerator(mainGroup);
+      
+      // Create Containment Structure
+      createContainment(mainGroup);
+      
+      // Create Shielding
+      createShielding(mainGroup);
+
+      // Add enhanced ground
+      createGround(mainGroup);
+
+      scene.add(mainGroup);
+      populateComponentSelect();
+      createParticleEffects();
+    }
+
+    function createRPV(parent) {
+      const group = new THREE.Group();
+      group.name = 'RPV_Group';
+
+      // Main vessel with realistic proportions (2.5m diameter, 5m height)
+      const mainGeometry = new THREE.CylinderGeometry(1.25, 1.25, 5, 24);
+      const rpvMaterial = new THREE.MeshStandardMaterial({
+        color: 0x708090,
+        metalness: 0.8,
+        roughness: 0.2,
+        envMapIntensity: 1.0
+      });
+      const mainVessel = new THREE.Mesh(mainGeometry, rpvMaterial);
+      mainVessel.position.set(0, 2.5, 0);
+      mainVessel.castShadow = true;
+      mainVessel.receiveShadow = true;
+
+      // Top dome
+      const domeGeometry = new THREE.SphereGeometry(1.25, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+      const dome = new THREE.Mesh(domeGeometry, rpvMaterial);
+      dome.position.set(0, 5, 0);
+      dome.castShadow = true;
+
+      // Bottom dome
+      const bottomDome = new THREE.Mesh(domeGeometry, rpvMaterial);
+      bottomDome.position.set(0, 0, 0);
+      bottomDome.rotation.x = Math.PI;
+      bottomDome.castShadow = true;
+
+      // Nozzles for connections
+      const nozzleGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.3, 8);
+      const nozzle1 = new THREE.Mesh(nozzleGeometry, rpvMaterial);
+      nozzle1.position.set(1.4, 3, 0);
+      nozzle1.rotation.z = Math.PI / 2;
+
+      const nozzle2 = new THREE.Mesh(nozzleGeometry, rpvMaterial);
+      nozzle2.position.set(-1.4, 2, 0);
+      nozzle2.rotation.z = -Math.PI / 2;
+
+      group.add(mainVessel, dome, bottomDome, nozzle1, nozzle2);
+      
+      // Make all meshes clippable
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.material.clippingPlanes = clippingPlanes;
+          child.name = 'RPV';
+        }
+      });
+
+      addComponentGroup('RPV', group, parent);
+    }
+
+    function createReactorCore(parent) {
+      const group = new THREE.Group();
+      group.name = 'Core_Group';
+
+      // Core cylinder with graphite blocks
+      const coreGeometry = new THREE.CylinderGeometry(1.0, 1.0, 3.5, 16);
+      const coreMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2a2a2a,
+        roughness: 0.8,
+        metalness: 0.1
+      });
+      const core = new THREE.Mesh(coreGeometry, coreMaterial);
+      core.position.set(0, 2.5, 0);
+      core.castShadow = true;
+
+      // TRISO fuel representation - small spheres
+      const trisoGeometry = new THREE.SphereGeometry(0.05, 8, 6);
+      const trisoMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffaa00,
+        emissive: 0x221100,
+        roughness: 0.6
+      });
+
+      // Add random TRISO particles
+      for (let i = 0; i < 150; i++) {
+        const triso = new THREE.Mesh(trisoGeometry, trisoMaterial);
+        const radius = Math.random() * 0.8;
+        const theta = Math.random() * Math.PI * 2;
+        const y = (Math.random() - 0.5) * 3;
+        
+        triso.position.set(
+          Math.cos(theta) * radius,
+          2.5 + y,
+          Math.sin(theta) * radius
+        );
+        group.add(triso);
+      }
+
+      group.add(core);
+      
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.material.clippingPlanes = clippingPlanes;
+          child.name = 'Core';
+        }
+      });
+
+      addComponentGroup('Core', group, parent);
+    }
+
+    function createIHX(parent) {
+      const group = new THREE.Group();
+      group.name = 'IHX_Group';
+
+      // Main IHX body
+      const ihxGeometry = new THREE.CylinderGeometry(0.8, 0.8, 3.5, 16);
+      const ihxMaterial = new THREE.MeshStandardMaterial({
+        color: 0xa0a0a0,
+        metalness: 0.7,
+        roughness: 0.3
+      });
+      const ihx = new THREE.Mesh(ihxGeometry, ihxMaterial);
+      ihx.position.set(4.5, 2, 0);
+      ihx.castShadow = true;
+
+      // Tube bundle representation
+      const tubeGeometry = new THREE.CylinderGeometry(0.02, 0.02, 3.2, 6);
+      const tubeMaterial = new THREE.MeshStandardMaterial({
+        color: 0xc0c0c0,
+        metalness: 0.9,
+        roughness: 0.1
+      });
+
+      // Create tube bundle pattern
+      for (let i = 0; i < 7; i++) {
+        for (let j = 0; j < 7; j++) {
+          const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+          tube.position.set(
+            4.5 + (i - 3) * 0.15,
+            2,
+            (j - 3) * 0.15
+          );
+          group.add(tube);
+        }
+      }
+
+      group.add(ihx);
+      
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.material.clippingPlanes = clippingPlanes;
+          child.name = 'IHX';
+        }
+      });
+
+      addComponentGroup('IHX', group, parent);
+    }
+
+    function createCrossVesselDuct(parent) {
+      const group = new THREE.Group();
+      group.name = 'CrossDuct_Group';
+
+      // Main duct pipe
+      const ductGeometry = new THREE.CylinderGeometry(0.4, 0.4, 3.5, 12);
+      const ductMaterial = new THREE.MeshStandardMaterial({
+        color: 0x8a8a8a,
+        metalness: 0.6,
+        roughness: 0.4
+      });
+      const duct = new THREE.Mesh(ductGeometry, ductMaterial);
+      duct.position.set(2.25, 2.5, 0);
+      duct.rotation.z = Math.PI / 2;
+      duct.castShadow = true;
+
+      // Insulation layers
+      const insulationGeometry = new THREE.CylinderGeometry(0.45, 0.45, 3.2, 12);
+      const insulationMaterial = new THREE.MeshStandardMaterial({
+        color: 0x444444,
+        roughness: 0.9,
+        transparent: true,
+        opacity: 0.8
+      });
+      const insulation = new THREE.Mesh(insulationGeometry, insulationMaterial);
+      insulation.position.set(2.25, 2.5, 0);
+      insulation.rotation.z = Math.PI / 2;
+
+      group.add(duct, insulation);
+      
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.material.clippingPlanes = clippingPlanes;
+          child.name = 'Cross_Duct';
+        }
+      });
+
+      addComponentGroup('Cross_Duct', group, parent);
+    }
+
+    function createHeliumPump(parent) {
+      const group = new THREE.Group();
+      group.name = 'HeliumPump_Group';
+
+      // Pump housing
+      const pumpGeometry = new THREE.CylinderGeometry(0.6, 0.8, 1.2, 12);
+      const pumpMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2e7d32,
+        metalness: 0.7,
+        roughness: 0.3
+      });
+      const pump = new THREE.Mesh(pumpGeometry, pumpMaterial);
+      pump.position.set(4.5, 0.6, 2.5);
+      pump.castShadow = true;
+
+      // Impeller (will rotate during animation)
+      const impellerGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 6);
+      const impellerMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1565c0,
+        metalness: 0.8,
+        roughness: 0.2
+      });
+      const impeller = new THREE.Mesh(impellerGeometry, impellerMaterial);
+      impeller.position.set(4.5, 0.8, 2.5);
+      impeller.name = 'impeller';
+
+      // Impeller blades
+      const bladeGeometry = new THREE.BoxGeometry(0.3, 0.05, 0.15);
+      for (let i = 0; i < 6; i++) {
+        const blade = new THREE.Mesh(bladeGeometry, impellerMaterial);
+        const angle = (i / 6) * Math.PI * 2;
+        blade.position.set(
+          Math.cos(angle) * 0.25,
+          0,
+          Math.sin(angle) * 0.25
+        );
+        blade.rotation.y = angle + Math.PI / 2;
+        impeller.add(blade);
+      }
+
+      group.add(pump, impeller);
+      
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.material.clippingPlanes = clippingPlanes;
+          child.name = 'Helium_Pump';
+        }
+      });
+
+      addComponentGroup('Helium_Pump', group, parent);
+    }
+
+    function createControlDrums(parent) {
+      for (let i = 0; i < 6; i++) {
+        const group = new THREE.Group();
+        group.name = `ControlDrum_${i + 1}_Group`;
+
+        // Drum cylinder
+        const drumGeometry = new THREE.CylinderGeometry(0.18, 0.18, 2.5, 12);
+        const drumMaterial = new THREE.MeshStandardMaterial({
+          color: 0xffc107,
+          metalness: 0.4,
+          roughness: 0.6
+        });
+        const drum = new THREE.Mesh(drumGeometry, drumMaterial);
+
+        // Absorber section (half cylinder in different color)
+        const absorberGeometry = new THREE.CylinderGeometry(0.19, 0.19, 2.5, 12, 1, false, 0, Math.PI);
+        const absorberMaterial = new THREE.MeshStandardMaterial({
+          color: 0x424242,
+          metalness: 0.6,
+          roughness: 0.4
+        });
+        const absorber = new THREE.Mesh(absorberGeometry, absorberMaterial);
+
+        drum.add(absorber);
+
+        const angle = (i / 6) * Math.PI * 2;
+        drum.position.set(
+          Math.cos(angle) * 1.6,
+          2.5,
+          Math.sin(angle) * 1.6
+        );
+        drum.castShadow = true;
+        drum.name = `Control_Drum_${i + 1}`;
+
+        group.add(drum);
+        
+        group.traverse((child) => {
+          if (child.isMesh) {
+            child.material.clippingPlanes = clippingPlanes;
+          }
+        });
+
+        addComponentGroup(`Control_Drum_${i + 1}`, group, parent);
+      }
+    }
+
+    function createTurbineGenerator(parent) {
+      const group = new THREE.Group();
+      group.name = 'Turbine_Group';
+
+      // Turbine housing
+      const turbineGeometry = new THREE.CylinderGeometry(1.0, 1.2, 1.5, 16);
+      const turbineMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1976d2,
+        metalness: 0.7,
+        roughness: 0.3
+      });
+      const turbine = new THREE.Mesh(turbineGeometry, turbineMaterial);
+      turbine.position.set(8, 0.75, 0);
+      turbine.rotation.z = Math.PI / 2;
+      turbine.castShadow = true;
+
+      // Generator section
+      const generatorGeometry = new THREE.BoxGeometry(1.5, 1.0, 1.0);
+      const generatorMaterial = new THREE.MeshStandardMaterial({
+        color: 0x0d47a1,
+        metalness: 0.6,
+        roughness: 0.4
+      });
+      const generator = new THREE.Mesh(generatorGeometry, generatorMaterial);
+      generator.position.set(9.5, 0.75, 0);
+      generator.castShadow = true;
+
+      // Turbine blades (will rotate)
+      const bladeGeometry = new THREE.BoxGeometry(0.8, 0.05, 0.1);
+      const bladeMaterial = new THREE.MeshStandardMaterial({
+        color: 0xe3f2fd,
+        metalness: 0.9,
+        roughness: 0.1
+      });
+
+      const bladeGroup = new THREE.Group();
+      bladeGroup.name = 'turbine_blades';
+      for (let i = 0; i < 8; i++) {
+        const blade = new THREE.Mesh(bladeGeometry, bladeMaterial);
+        const angle = (i / 8) * Math.PI * 2;
+        blade.position.set(Math.cos(angle) * 0.4, 0, Math.sin(angle) * 0.4);
+        blade.rotation.y = angle;
+        bladeGroup.add(blade);
+      }
+      bladeGroup.position.set(8, 0.75, 0);
+      
+      group.add(turbine, generator, bladeGroup);
+      
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.material.clippingPlanes = clippingPlanes;
+          child.name = 'Turbine_Generator';
+        }
+      });
+
+      addComponentGroup('Turbine_Generator', group, parent);
+    }
+
+    function createContainment(parent) {
+      const group = new THREE.Group();
+      group.name = 'Containment_Group';
+
+      // Main containment structure
+      const containmentGeometry = new THREE.BoxGeometry(12, 6, 6);
+      const containmentMaterial = new THREE.MeshStandardMaterial({
+        color: 0x546e7a,
+        transparent: true,
+        opacity: 0.15,
+        roughness: 0.8,
+        metalness: 0.1
+      });
+      const containment = new THREE.Mesh(containmentGeometry, containmentMaterial);
+      containment.position.set(2, 3, 0);
+      containment.name = 'Containment';
+
+      // Containment walls (non-transparent)
+      const wallMaterial = new THREE.MeshStandardMaterial({
+        color: 0x37474f,
+        roughness: 0.9,
+        metalness: 0.1
+      });
+
+      // Create wall sections
+      const wallThickness = 0.2;
+      const walls = [
+        // Front and back walls
+        { size: [12, 6, wallThickness], pos: [2, 3, 3] },
+        { size: [12, 6, wallThickness], pos: [2, 3, -3] },
+        // Left and right walls
+        { size: [wallThickness, 6, 6], pos: [-4, 3, 0] },
+        { size: [wallThickness, 6, 6], pos: [8, 3, 0] },
+        // Floor and ceiling
+        { size: [12, wallThickness, 6], pos: [2, 0, 0] },
+        { size: [12, wallThickness, 6], pos: [2, 6, 0] }
+      ];
+
+      walls.forEach(wall => {
+        const wallGeometry = new THREE.BoxGeometry(...wall.size);
+        const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
+        wallMesh.position.set(...wall.pos);
+        wallMesh.castShadow = true;
+        wallMesh.receiveShadow = true;
+        group.add(wallMesh);
+      });
+
+      group.add(containment);
+      
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.material.clippingPlanes = clippingPlanes;
+        }
+      });
+
+      addComponentGroup('Containment', group, parent);
+    }
+
+    function createShielding(parent) {
+      const group = new THREE.Group();
+      group.name = 'Shielding_Group';
+
+      // Radiation shielding around RPV
+      const shieldGeometry = new THREE.CylinderGeometry(1.6, 1.6, 5.5, 24);
+      const shieldMaterial = new THREE.MeshStandardMaterial({
+        color: 0x616161,
+        transparent: true,
+        opacity: 0.6,
+        roughness: 0.8,
+        metalness: 0.2
+      });
+      const shield = new THREE.Mesh(shieldGeometry, shieldMaterial);
+      shield.position.set(0, 2.75, 0);
+      shield.name = 'Shielding';
+
+      group.add(shield);
+      
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.material.clippingPlanes = clippingPlanes;
+        }
+      });
+
+      addComponentGroup('Shielding', group, parent);
+    }
+
+    function createGround(parent) {
+      // Enhanced ground with realistic textures
+      const groundGeometry = new THREE.PlaneGeometry(50, 50);
+      const groundMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2c3e50,
+        roughness: 0.8,
+        metalness: 0.1
+      });
+      const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      ground.position.y = -0.1;
+      parent.add(ground);
+
+      // Grid pattern for reference
+      const gridHelper = new THREE.GridHelper(30, 30, 0x444444, 0x333333);
+      gridHelper.position.y = 0;
+      parent.add(gridHelper);
+    }
+
+    function createParticleEffects() {
+      // Helium flow particles
+      const particleCount = 100;
+      const positions = new Float32Array(particleCount * 3);
+      const velocities = new Float32Array(particleCount * 3);
+
+      for (let i = 0; i < particleCount; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 2;
+        positions[i * 3 + 1] = Math.random() * 5;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 2;
+        
+        velocities[i * 3] = 0;
+        velocities[i * 3 + 1] = 0.02;
+        velocities[i * 3 + 2] = 0;
+      }
+
+      const particleGeometry = new THREE.BufferGeometry();
+      particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+      const particleMaterial = new THREE.PointsMaterial({
+        color: 0x00ff88,
+        size: 0.1,
+        transparent: true,
+        opacity: 0.6,
+        blending: THREE.AdditiveBlending
+      });
+
+      const particles = new THREE.Points(particleGeometry, particleMaterial);
+      particles.name = 'helium_particles';
+      particles.visible = false;
+      scene.add(particles);
+
+      particleSystems.push({ 
+        particles, 
+        positions, 
+        velocities, 
+        geometry: particleGeometry 
+      });
+    }
+
+    function addComponentGroup(name, group, parent) {
+      componentGroups[name] = group;
+      components[name] = group.children[0]; // Main mesh for compatibility
+      parent.add(group);
+    }
+
+    function populateComponentSelect() {
+      const select = document.getElementById('componentSelect');
+      const names = {
+        'RPV': 'Vaso de Pressão (RPV)',
+        'Core': 'Núcleo do Reator',
+        'IHX': 'Trocador de Calor (IHX)',
+        'Cross_Duct': 'Duto de Conexão',
+        'Helium_Pump': 'Bomba de Hélio',
+        'Turbine_Generator': 'Turbina/Gerador',
+        'Containment': 'Contenção',
+        'Shielding': 'Blindagem'
+      };
+
+      Object.keys(componentGroups).forEach(name => {
+        if (name.includes('Control_Drum')) return;
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = names[name] || name;
+        select.appendChild(option);
+      });
+
+      // Add control drums as a group
+      const drumOption = document.createElement('option');
+      drumOption.value = 'Control_Drum_1';
+      drumOption.textContent = 'Tambores de Controle';
+      select.appendChild(drumOption);
+    }
+
+    function onMouseMove(event) {
+      // Highlight objects on hover
+      const mouse = new THREE.Vector2();
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(Object.values(components));
+      
+      if (intersects.length > 0) {
+        document.body.style.cursor = 'pointer';
+      } else {
+        document.body.style.cursor = 'default';
+      }
+    }
+
+    function onMouseClick(event) {
+      const mouse = new THREE.Vector2();
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(Object.values(components));
+
+      if (intersects.length > 0) {
+        selectObject(intersects[0].object);
+      } else {
+        deselectObject();
+      }
+    }
+
+    function selectObject(object) {
+      // Deselect previous
+      if (selectedObject) {
+        selectedObject.material.emissive.setHex(0x000000);
+        window.highlightSpot.intensity = 0;
+      }
+
+      // Select new
+      selectedObject = object;
+      object.material.emissive.setHex(0x222222);
+      
+      // Highlight with spotlight
+      window.highlightSpot.target = object;
+      window.highlightSpot.intensity = 0.5;
+      
+      // Update UI
+      document.getElementById('componentSelect').value = object.name;
+      showInfo(object.name);
+      focusOnObject(object);
+    }
+
+    function deselectObject() {
+      if (selectedObject) {
+        selectedObject.material.emissive.setHex(0x000000);
+        selectedObject = null;
+        window.highlightSpot.intensity = 0;
+      }
+      document.getElementById('componentSelect').value = '';
+      closeInfo();
+    }
+
+    function showInfo(componentName) {
+      const info = getComponentInfo(componentName);
+      document.getElementById('infoTitle').textContent = info.title;
+      document.getElementById('infoDesc').textContent = info.description;
+      document.getElementById('componentStats').innerHTML = info.stats;
+      document.getElementById('info').style.display = 'block';
+    }
+
+    function getComponentInfo(name) {
+      const data = {
+        'RPV': {
+          title: 'Vaso de Pressão do Reator',
+          description: 'Contém o núcleo e o refrigerante hélio. Opera a 750°C e 70 bar. Construído em aço inoxidável 316L para resistir às condições extremas de alta temperatura e pressão.',
+          stats: '• Diâmetro: 2.5m<br>• Altura: 5m<br>• Pressão: 70 bar<br>• Temperatura: 750°C<br>• Material: Aço Inox 316L'
+        },
+        'Core': {
+          title: 'Núcleo do Reator',
+          description: 'Combustível TRISO em matriz de grafite. Potência de 10 MWt com vida útil de 20 anos. As partículas TRISO garantem contenção segura dos produtos de fissão mesmo em altas temperaturas.',
+          stats: '• Potência: 10 MWt<br>• Combustível: TRISO<br>• Moderador: Grafite<br>• Vida útil: 20 anos<br>• Temperatura máx: 1600°C'
+        },
+        'IHX': {
+          title: 'Trocador de Calor Intermediário',
+          description: 'Transfere calor do hélio primário para nitrogênio secundário através de feixe de tubos de alta eficiência. Design compacto otimizado para máxima transferência térmica.',
+          stats: '• Eficiência: >92%<br>• Material: Inconel 617<br>• Configuração: Tubo e casco<br>• Fluido primário: Hélio<br>• Fluido secundário: N₂'
+        },
+        'Cross_Duct': {
+          title: 'Duto de Conexão',
+          description: 'Liga RPV ao IHX com isolamento térmico multicamada. Projetado para minimizar perdas térmicas e suportar expansão térmica diferencial entre os componentes.',
+          stats: '• Diâmetro: 0.8m<br>• Material: Hastelloy X<br>• Isolamento: Cerâmico<br>• Comprimento: 3.5m<br>• Temp. operação: 750°C'
+        },
+        'Helium_Pump': {
+          title: 'Bomba de Hélio',
+          description: 'Circulador centrífugo magnético para movimento do hélio primário. Sistema redundante com backup passivo para garantia de segurança em todas as condições operacionais.',
+          stats: '• Vazão: 12 kg/s<br>• Potência: 150 kW<br>• Tipo: Centrífuga magnética<br>• Redundância: Tripla<br>• Backup: Circulação natural'
+        },
+        'Turbine_Generator': {
+          title: 'Turbina-Gerador',
+          description: 'Sistema de conversão de energia baseado no ciclo Brayton fechado com nitrogênio. Alta eficiência e confiabilidade para geração contínua de energia elétrica.',
+          stats: '• Potência elétrica: 4 MWe<br>• Ciclo: Brayton fechado<br>• Fluido: Nitrogênio<br>• Eficiência: ~40%<br>• Rotação: 3600 rpm'
+        },
+        'Containment': {
+          title: 'Sistema de Contenção',
+          description: 'Estrutura robusta de concreto armado projetada para conter radiação e resistir a eventos extremos. Proteção completa contra condições ambientais adversas.',
+          stats: '• Espessura: 1.2m<br>• Material: Concreto armado<br>• Resistência sísmica: Cat. 5<br>• Proteção: IP68<br>• Vida útil: 60+ anos'
+        },
+        'Shielding': {
+          title: 'Blindagem Radiológica',
+          description: 'Blindagem multicamada ao redor do RPV para atenuação de radiação neutrónica e gama. Garante níveis seguros de radiação em áreas de acesso.',
+          stats: '• Espessura: 0.4m<br>• Material: Concreto + Chumbo<br>• Atenuação: >99.9%<br>• Tipo: Multicamada<br>• Acesso: Remoto'
+        }
+      };
+
+      if (name.includes('Control_Drum')) {
+        return {
+          title: 'Tambor de Controle',
+          description: 'Sistema de controle de reatividade com material absorvedor B₄C. Rotação precisa para controle fino da reação nuclear e sistemas de parada de emergência.',
+          stats: '• Material absorvedor: B₄C<br>• Rotação: 0-180°<br>• Controle: Automático/Manual<br>• Tempo resposta: <2s<br>• Precisão: ±0.1°'
+        };
+      }
+
+      return data[name] || { 
+        title: name, 
+        description: 'Componente do sistema U-Battery.',
+        stats: 'Informações técnicas não disponíveis.'
+      };
+    }
+
+    // Enhanced Global Functions
+    window.resetCamera = function() {
+      camera.position.set(12, 10, 12);
+      controls.target.set(0, 2.5, 0);
+      controls.update();
+      deselectObject();
+    }
+
+    window.toggleWireframe = function() {
+      wireframeMode = !wireframeMode;
+      Object.values(componentGroups).forEach(group => {
+        group.traverse((child) => {
+          if (child.isMesh && child.material) {
+            child.material.wireframe = wireframeMode;
+          }
+        });
+      });
+    }
+
+    window.selectComponent = function(name) {
+      if (!name) {
+        deselectObject();
+        return;
+      }
+      const component = components[name];
+      if (component) {
+        selectObject(component);
+      }
+    }
+
+    window.toggleAnimation = function() {
+      animationRunning = !animationRunning;
+      const btn = document.getElementById('animBtn');
+      const status = document.getElementById('animStatus');
+      
+      if (animationRunning) {
+        btn.textContent = '⏸️ Stop Animation';
+        status.classList.add('active');
+        // Show particle effects
+        particleSystems.forEach(system => {
+          system.particles.visible = true;
+        });
+      } else {
+        btn.textContent = '▶️ Start Animation';
+        status.classList.remove('active');
+        // Hide particle effects
+        particleSystems.forEach(system => {
+          system.particles.visible = false;
+        });
+      }
+    }
+
+    window.toggleCrossSection = function() {
+      crossSectionEnabled = !crossSectionEnabled;
+      const btn = document.getElementById('crossBtn');
+      
+      if (crossSectionEnabled) {
+        btn.textContent = '❌ Disable Cross-Section';
+        renderer.clippingPlanes = clippingPlanes;
+        renderer.localClippingEnabled = true;
+      } else {
+        btn.textContent = '✂️ Enable Cross-Section';
+        renderer.clippingPlanes = [];
+        renderer.localClippingEnabled = false;
+      }
+    }
+
+    window.updateCrossSection = function(value) {
+      if (clippingPlanes.length > 0) {
+        clippingPlanes[0].constant = parseFloat(value);
+      }
+    }
+
+    window.updateOrientation = function(value) {
+      if (clippingPlanes.length > 0) {
+        const angle = parseFloat(value) * Math.PI / 180;
+        clippingPlanes[0].normal.set(Math.cos(angle), 0, Math.sin(angle));
+      }
+    }
+
+    window.closeInfo = function() {
+      document.getElementById('info').style.display = 'none';
+    }
+
+    function focusOnObject(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const distance = maxDim * 4;
+      
+      controls.target.copy(center);
+      camera.position.copy(center);
+      camera.position.z += distance;
+      camera.position.y += distance * 0.3;
+      controls.update();
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (animationRunning) {
+        const time = Date.now() * 0.001;
+        
+        // Rotate control drums
+        Object.keys(componentGroups).forEach(name => {
+          if (name.includes('Control_Drum')) {
+            const group = componentGroups[name];
+            if (group.children[0]) {
+              group.children[0].rotation.y = Math.sin(time * 0.5) * 0.3;
+            }
+          }
+        });
+
+        // Rotate helium pump impeller
+        const pumpGroup = componentGroups['Helium_Pump'];
+        if (pumpGroup) {
+          pumpGroup.traverse((child) => {
+            if (child.name === 'impeller') {
+              child.rotation.y = time * 8;
+            }
+          });
+        }
+
+        // Rotate turbine blades
+        const turbineGroup = componentGroups['Turbine_Generator'];
+        if (turbineGroup) {
+          turbineGroup.traverse((child) => {
+            if (child.name === 'turbine_blades') {
+              child.rotation.z = time * 12;
+            }
+          });
+        }
+
+        // Animate particles
+        particleSystems.forEach(system => {
+          const positions = system.positions;
+          for (let i = 0; i < positions.length; i += 3) {
+            positions[i + 1] += system.velocities[i + 1];
+            if (positions[i + 1] > 5) {
+              positions[i + 1] = 0;
+              positions[i] = (Math.random() - 0.5) * 2;
+              positions[i + 2] = (Math.random() - 0.5) * 2;
+            }
+          }
+          system.geometry.attributes.position.needsUpdate = true;
+        });
+
+        // Animate core temperature effect
+        const coreGroup = componentGroups['Core'];
+        if (coreGroup) {
+          coreGroup.traverse((child) => {
+            if (child.isMesh && child.material.emissive) {
+              const intensity = 0.1 + Math.sin(time * 2) * 0.05;
+              child.material.emissive.setHex(0x331100);
+              child.material.emissiveIntensity = intensity;
+            }
+          });
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Debug helpers
+    window.UBatteryEnhanced = {
+      components: components,
+      componentGroups: componentGroups,
+      selectByName: (name) => window.selectComponent(name),
+      listComponents: () => console.log(Object.keys(components)),
+      toggleCrossSection: () => window.toggleCrossSection(),
+      particleSystems: particleSystems
+    };
+  </script>
+</body>
+</html>
