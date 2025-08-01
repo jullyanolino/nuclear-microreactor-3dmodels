@@ -255,18 +255,10 @@
       const componentNameDisplay = document.getElementById('componentName');
       const componentInfo = document.getElementById('componentInfo');
       if (componentName) {
-        const component = fpso.getObjectByName(componentName);
-        if (component) {
-          const description = componentDescriptions[componentName] || "No description available.";
-          const position = `Position: (${component.position.x.toFixed(2)}, ${component.position.y.toFixed(2)}, ${component.position.z.toFixed(2)})`;
-          const scale = component.scale ? `Scale: (${component.scale.x.toFixed(2)}, ${component.scale.y.toFixed(2)}, ${component.scale.z.toFixed(2)})` : '';
-          const rotation = component.rotation ? `Rotation: (${(component.rotation.x * 180 / Math.PI).toFixed(2)}°, ${(component.rotation.y * 180 / Math.PI).toFixed(2)}°, ${(component.rotation.z * 180 / Math.PI).toFixed(2)}°)` : '';
-          componentNameDisplay.textContent = componentName;
-          componentInfo.textContent = `${description}\nType: ${component.type}\n${position}\n${scale}${rotation ? '\n' + rotation : ''}`;
-          infoPanel.style.display = 'block';
-        } else {
-          infoPanel.style.display = 'none';
-        }
+        const description = componentDescriptions[componentName] || "No description available.";
+        componentNameDisplay.textContent = componentName;
+        componentInfo.textContent = description;
+        infoPanel.style.display = 'block';
       } else {
         infoPanel.style.display = 'none';
       }
