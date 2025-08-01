@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FPSO Model - Interactive 3D Visualization</title>
+  <style>
+    body { 
+      margin: 0; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0a1e3d, #1e5799);
+      color: white;
+      overflow: hidden;
+    }
+    canvas { 
+      display: block; 
+      width: 100%; 
+      height: 100vh; 
+    }
+    #controls {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 20px;
+      border-radius: 12px;
+      min-width: 220px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    button {
+      display: block;
+      width: 100%;
+      margin: 8px 0;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #0066cc, #004499);
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 10px rgba(0, 102, 204, 0.3);
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0, 102, 204, 0.4);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, #3498db, #2980b9);
+      box-shadow: 0 2px 10px rgba(52, 152, 219, 0.3);
+    }
+    button.secondary:hover {
+      box-shadow: 0 4px 20px rgba(52, 152, 219, 0.4);
+    }
+    button.active {
+      background: linear-gradient(135deg, #ff6b35, #f7931e);
+      box-shadow: 0 2px 10px rgba(255, 107, 53, 0.3);
+    }
+    button.active:hover {
+      box-shadow: 0 4px 20px rgba(255, 107, 53, 0.4);
+    }
+    #info {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 350px;
+      display: none;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    select {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      font-size: 14px;
+    }
+    select option {
+      background: #1a1a2e;
+      color: white;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-left: 8px;
+      background: #ff4444;
+    }
+    .status-indicator.active {
+      background: #00ff88;
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.6);
+    }
+    h3 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-size: 16px;
+    }
+    .component-stats {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    #selectionIndicator {
+      position: fixed;
+      pointer-events: none;
+      z-index: 1000;
+      color: #0066cc;
+      font-size: 24px;
+      text-shadow: 0 0 10px rgba(0, 102, 204, 0.8);
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="selectionIndicator">🎯</div>
+  
+  <div id="controls">
+    <h3>🚢 FPSO Controls</h3>
+    <button onclick="resetCamera()">🎯 Reset Camera</button>
+    <button class="secondary" onclick="toggleWireframe()">📐 Toggle Wireframe</button>
+    <select id="componentSelect" onchange="selectComponent(this.value)">
+      <option value="">Selecione um componente...</option>
+    </select>
+    <button onclick="toggleAnimation()">
+      <span id="animBtn">▶️ Start Animation</span>
+      <span class="status-indicator" id="animStatus"></span>
+    </button>
+  </div>
+
+  <div id="info">
+    <h3 id="infoTitle">Componente</h3>
+    <p id="infoDesc">Clique em um componente para ver informações.</p>
+    <div class="component-stats" id="componentStats"></div>
+    <button onclick="closeInfo()">✖️ Fechar</button>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // Variables
+    let scene, camera, renderer, controls;
+    let components = {};
+    let componentGroups = {};
+    let selectedObject = null;
+    let animationRunning = false;
+    let wireframeMode = false;
+    let selectionArrow = null;
+    let highlightOutline = null;
+    let ocean = null;
+
+    // Initialize
+    init();
+    createFPSOModel();
+    animate();
+
+    function init() {
+      // Scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x87ceeb);
+      scene.fog = new THREE.Fog(0x87ceeb, 500, 2000);
+
+      // Camera
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
+      camera.position.set(600, 200, 600);
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+      document.body.appendChild(renderer.domElement);
+
+      // Controls
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 0, 0);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.minDistance = 50;
+      controls.maxDistance = 1500;
+
+      // Lighting
+      setupLighting();
+
+      // Events
+      window.addEventListener('resize', onWindowResize);
+      renderer.domElement.addEventListener('click', onMouseClick);
+      renderer.domElement.addEventListener('mousemove', onMouseMove);
+    }
+
+    function setupLighting() {
+      // Ambient light
+      const ambientLight = new THREE.AmbientLight(0x404080, 0.6);
+      scene.add(ambientLight);
+
+      // Sun light
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+      directionalLight.position.set(200, 200, 100);
+      directionalLight.castShadow = true;
+      directionalLight.shadow.mapSize.width = 2048;
+      directionalLight.shadow.mapSize.height = 2048;
+      directionalLight.shadow.camera.near = 0.5;
+      directionalLight.shadow.camera.far = 500;
+      directionalLight.shadow.camera.left = -300;
+      directionalLight.shadow.camera.right = 300;
+      directionalLight.shadow.camera.top = 300;
+      directionalLight.shadow.camera.bottom = -300;
+      scene.add(directionalLight);
+
+      // Fill light
+      const fillLight = new THREE.DirectionalLight(0x4080ff, 0.3);
+      fillLight.position.set(-100, 50, -100);
+      scene.add(fillLight);
+
+      // Spotlight for highlighting
+      const spotLight = new THREE.SpotLight(0x0066cc, 0);
+      spotLight.position.set(0, 150, 0);
+      spotLight.angle = Math.PI / 6;
+      spotLight.penumbra = 0.3;
+      spotLight.decay = 2;
+      spotLight.distance = 500;
+      scene.add(spotLight);
+      window.highlightSpot = spotLight;
+    }
+
+    function createFPSOModel() {
+      const mainGroup = new THREE.Group();
+      mainGroup.name = 'FPSO_System';
+
+      // Create ocean
+      createOcean();
+
+      // Create FPSO components
+      createHull(mainGroup);
+      createTopsides(mainGroup);
+      createAccommodationBlock(mainGroup);
+      createHelideck(mainGroup);
+      createTurret(mainGroup);
+      createFlareSystem(mainGroup);
+      createProcessingModules(mainGroup);
+      createOffloadingSystem(mainGroup);
+      createLifeboats(mainGroup);
+      createCranes(mainGroup);
+
+      scene.add(mainGroup);
+      populateComponentSelect();
+      createSelectionIndicators();
+    }
+
+    function createOcean() {
+      const oceanGeometry = new THREE.PlaneGeometry(4000, 4000, 100, 100);
+      const oceanMaterial = new THREE.MeshStandardMaterial({
+        color: 0x006994,
+        transparent: true,
+        opacity: 0.8,
+        roughness: 0.1,
+        metalness: 0.1
+      });
+      
+      ocean = new THREE.Mesh(oceanGeometry, oceanMaterial);
+      ocean.rotation.x = -Math.PI / 2;
+      ocean.position.y = -30;
+      ocean.receiveShadow = true;
+      ocean.name = 'Ocean';
+      scene.add(ocean);
+    }
+
+    function createHull(parent) {
+      const group = new THREE.Group();
+      group.name = 'Hull_Group';
+
+      // Main hull body
+      const hullGeometry = new THREE.BoxGeometry(300, 25, 50);
+      const hullMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2c3e50,
+        metalness: 0.7,
+        roughness: 0.3
+      });
+      const hull = new THREE.Mesh(hullGeometry, hullMaterial);
+      hull.position.set(0, 0, 0);
+      hull.castShadow = true;
+      hull.receiveShadow = true;
+      hull.name = 'Hull';
+
+      // Bow section
+      const bowGeometry = new THREE.ConeGeometry(25, 40, 8);
+      const bow = new THREE.Mesh(bowGeometry, hullMaterial);
+      bow.position.set(170, 0, 0);
+      bow.rotation.z = Math.PI / 2;
+      bow.castShadow = true;
+      bow.name = 'Hull';
+
+      // Stern section
+      const sternGeometry = new THREE.BoxGeometry(20, 25, 50);
+      const stern = new THREE.Mesh(sternGeometry, hullMaterial);
+      stern.position.set(-160, 0, 0);
+      stern.castShadow = true;
+      stern.name = 'Hull';
+
+      // Hull reinforcements
+      for (let i = -12; i <= 12; i += 4) {
+        const frameGeometry = new THREE.BoxGeometry(295, 2, 2);
+        const frame = new THREE.Mesh(frameGeometry, hullMaterial);
+        frame.position.set(0, 14, i * 2);
+        group.add(frame);
+      }
+
+      group.add(hull, bow, stern);
+      addComponentGroup('Hull', group, parent);
+    }
+
+    function createTopsides(parent) {
+      const group = new THREE.Group();
+      group.name = 'Topsides_Group';
+
+      // Main deck
+      const deckGeometry = new THREE.BoxGeometry(280, 2, 45);
+      const deckMaterial = new THREE.MeshStandardMaterial({
+        color: 0x34495e,
+        metalness: 0.6,
+        roughness: 0.4
+      });
+      const deck = new THREE.Mesh(deckGeometry, deckMaterial);
+      deck.position.set(0, 15, 0);
+      deck.castShadow = true;
+      deck.receiveShadow = true;
+      deck.name = 'Topsides';
+
+      group.add(deck);
+      addComponentGroup('Topsides', group, parent);
+    }
+
+    function createAccommodationBlock(parent) {
+      const group = new THREE.Group();
+      group.name = 'Accommodation_Group';
+
+      // Main accommodation building
+      const accomGeometry = new THREE.BoxGeometry(40, 35, 30);
+      const accomMaterial = new THREE.MeshStandardMaterial({
+        color: 0xe74c3c,
+        metalness: 0.4,
+        roughness: 0.6
+      });
+      const accommodation = new THREE.Mesh(accomGeometry, accomMaterial);
+      accommodation.position.set(-100, 35, 0);
+      accommodation.castShadow = true;
+      accommodation.name = 'Accommodation';
+
+      // Windows
+      const windowGeometry = new THREE.BoxGeometry(2, 3, 0.5);
+      const windowMaterial = new THREE.MeshStandardMaterial({
+        color: 0x3498db,
+        transparent: true,
+        opacity: 0.8
+      });
+
+      // Add windows to accommodation
+      for (let floor = 0; floor < 4; floor++) {
+        for (let window = 0; window < 8; window++) {
+          const windowMesh = new THREE.Mesh(windowGeometry, windowMaterial);
+          windowMesh.position.set(
+            -100 + (window - 3.5) * 4,
+            20 + floor * 7,
+            15.5
+          );
+          group.add(windowMesh);
+        }
+      }
+
+      group.add(accommodation);
+      addComponentGroup('Accommodation', group, parent);
+    }
+
+    function createHelideck(parent) {
+      const group = new THREE.Group();
+      group.name = 'Helideck_Group';
+
+      // Helideck platform
+      const heliGeometry = new THREE.CylinderGeometry(18, 18, 2, 16);
+      const heliMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf39c12,
+        metalness: 0.5,
+        roughness: 0.5
+      });
+      const helideck = new THREE.Mesh(heliGeometry, heliMaterial);
+      helideck.position.set(-100, 54, 0);
+      helideck.castShadow = true;
+      helideck.name = 'Helideck';
+
+      // Support structure
+      const supportGeometry = new THREE.CylinderGeometry(2, 2, 15, 8);
+      const supportMaterial = new THREE.MeshStandardMaterial({
+        color: 0x7f8c8d,
+        metalness: 0.8,
+        roughness: 0.2
+      });
+
+      for (let i = 0; i < 4; i++) {
+        const support = new THREE.Mesh(supportGeometry, supportMaterial);
+        const angle = (i / 4) * Math.PI * 2;
+        support.position.set(
+          -100 + Math.cos(angle) * 12,
+          46,
+          Math.sin(angle) * 12
+        );
+        group.add(support);
+      }
+
+      // Landing markers
+      const markerGeometry = new THREE.RingGeometry(8, 10, 16);
+      const markerMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.8
+      });
+      const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+      marker.position.set(-100, 55.1, 0);
+      marker.rotation.x = -Math.PI / 2;
+      group.add(marker);
+
+      group.add(helideck);
+      addComponentGroup('Helideck', group, parent);
+    }
+
+    function createTurret(parent) {
+      const group = new THREE.Group();
+      group.name = 'Turret_Group';
+
+      // Main turret body
+      const turretGeometry = new THREE.CylinderGeometry(15, 15, 40, 16);
+      const turretMaterial = new THREE.MeshStandardMaterial({
+        color: 0x34495e,
+        metalness: 0.7,
+        roughness: 0.3
+      });
+      const turret = new THREE.Mesh(turretGeometry, turretMaterial);
+      turret.position.set(-140, 5, 0);
+      turret.castShadow = true;
+      turret.name = 'Turret';
+
+      // Turret base
+      const baseGeometry = new THREE.CylinderGeometry(20, 20, 8, 16);
+      const base = new THREE.Mesh(baseGeometry, turretMaterial);
+      base.position.set(-140, -16, 0);
+      base.castShadow = true;
+      base.name = 'Turret';
+
+      // Mooring hawsepipes
+      const hawseGeometry = new THREE.CylinderGeometry(3, 3, 25, 8);
+      for (let i = 0; i < 8; i++) {
+        const hawse = new THREE.Mesh(hawseGeometry, turretMaterial);
+        const angle = (i / 8) * Math.PI * 2;
+        hawse.position.set(
+          -140 + Math.cos(angle) * 18,
+          5,
+          Math.sin(angle) * 18
+        );
+        hawse.rotation.z = angle;
+        group.add(hawse);
+      }
+
+      group.add(turret, base);
+      addComponentGroup('Turret', group, parent);
+    }
+
+    function createFlareSystem(parent) {
+      const group = new THREE.Group();
+      group.name = 'Flare_Group';
+
+      // Flare tower
+      const towerGeometry = new THREE.CylinderGeometry(2, 3, 60, 8);
+      const towerMaterial = new THREE.MeshStandardMaterial({
+        color: 0x7f8c8d,
+        metalness: 0.8,
+        roughness: 0.2
+      });
+      const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+      tower.position.set(120, 45, -15);
+      tower.castShadow = true;
+      tower.name = 'Flare_System';
+
+      // Flare boom
+      const boomGeometry = new THREE.BoxGeometry(40, 3, 3);
+      const boom = new THREE.Mesh(boomGeometry, towerMaterial);
+      boom.position.set(140, 70, -15);
+      boom.rotation.z = 0.3;
+      boom.castShadow = true;
+      boom.name = 'Flare_System';
+
+      // Flare tip
+      const tipGeometry = new THREE.SphereGeometry(2, 8, 6);
+      const tipMaterial = new THREE.MeshStandardMaterial({
+        color: 0xff4444,
+        emissive: 0x331100,
+        emissiveIntensity: 0.5
+      });
+      const tip = new THREE.Mesh(tipGeometry, tipMaterial);
+      tip.position.set(158, 80, -15);
+      tip.name = 'Flare_System';
+
+      group.add(tower, boom, tip);
+      addComponentGroup('Flare_System', group, parent);
+    }
+
+    function createProcessingModules(parent) {
+      const group = new THREE.Group();
+      group.name = 'Processing_Group';
+
+      const modulePositions = [
+        { name: 'Separator_Module', pos: [20, 25, 0], size: [40, 15, 20] },
+        { name: 'Compression_Module', pos: [80, 25, 0], size: [30, 12, 18] },
+        { name: 'Treatment_Module', pos: [40, 25, -15], size: [35, 10, 15] },
+        { name: 'Power_Generation', pos: [0, 25, 15], size: [25, 18, 12] }
+      ];
+
+      modulePositions.forEach(module => {
+        const moduleGeometry = new THREE.BoxGeometry(...module.size);
+        const moduleMaterial = new THREE.MeshStandardMaterial({
+          color: 0x2ecc71,
+          metalness: 0.6,
+          roughness: 0.4
+        });
+        const moduleMesh = new THREE.Mesh(moduleGeometry, moduleMaterial);
+        moduleMesh.position.set(...module.pos);
+        moduleMesh.castShadow = true;
+        moduleMesh.name = module.name;
+
+        // Add piping
+        const pipeGeometry = new THREE.CylinderGeometry(1, 1, 20, 8);
+        const pipeMaterial = new THREE.MeshStandardMaterial({
+          color: 0x95a5a6,
+          metalness: 0.8,
+          roughness: 0.2
+        });
+        
+        for (let i = 0; i < 3; i++) {
+          const pipe = new THREE.Mesh(pipeGeometry, pipeMaterial);
+          pipe.position.set(
+            module.pos[0] + (i - 1) * 8,
+            module.pos[1] + module.size[1] / 2 + 5,
+            module.pos[2]
+          );
+          pipe.rotation.x = Math.PI / 2;
+          group.add(pipe);
+        }
+
+        group.add(moduleMesh);
+      });
+
+      addComponentGroup('Processing_Modules', group, parent);
+    }
+
+    function createOffloadingSystem(parent) {
+      const group = new THREE.Group();
+      group.name = 'Offloading_Group';
+
+      // Offloading manifold
+      const manifoldGeometry = new THREE.BoxGeometry(15, 8, 10);
+      const manifoldMaterial = new THREE.MeshStandardMaterial({
+        color: 0xe67e22,
+        metalness: 0.7,
+        roughness: 0.3
+      });
+      const manifold = new THREE.Mesh(manifoldGeometry, manifoldMaterial);
+      manifold.position.set(130, 20, 0);
+      manifold.castShadow = true;
+      manifold.name = 'Offloading_System';
+
+      // Loading arms
+      const armGeometry = new THREE.BoxGeometry(25, 3, 3);
+      const armMaterial = new THREE.MeshStandardMaterial({
+        color: 0xd35400,
+        metalness: 0.8,
+        roughness: 0.2
+      });
+
+      for (let i = 0; i < 2; i++) {
+        const arm = new THREE.Mesh(armGeometry, armMaterial);
+        arm.position.set(145, 20, (i - 0.5) * 8);
+        arm.rotation.y = 0.3;
+        arm.castShadow = true;
+        group.add(arm);
+      }
+
+      group.add(manifold);
+      addComponentGroup('Offloading_System', group, parent);
+    }
+
+    function createLifeboats(parent) {
+      const group = new THREE.Group();
+      group.name = 'Lifeboats_Group';
+
+      const boatGeometry = new THREE.BoxGeometry(12, 4, 6);
+      const boatMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf39c12,
+        metalness: 0.3,
+        roughness: 0.7
+      });
+
+      // Port side lifeboats
+      for (let i = 0; i < 4; i++) {
+        const boat = new THREE.Mesh(boatGeometry, boatMaterial);
+        boat.position.set(-60 + i * 40, 25, 28);
+        boat.castShadow = true;
+        boat.name = 'Lifeboats';
+
+        // Davit
+        const davitGeometry = new THREE.CylinderGeometry(1, 1, 15, 8);
+        const davitMaterial = new THREE.MeshStandardMaterial({
+          color: 0x7f8c8d,
+          metalness: 0.8,
+          roughness: 0.2
+        });
+        const davit = new THREE.Mesh(davitGeometry, davitMaterial);
+        davit.position.set(-60 + i * 40, 32, 22);
+        davit.rotation.z = -0.3;
+        group.add(davit);
+
+        group.add(boat);
+      }
+
+      // Starboard side lifeboats
+      for (let i = 0; i < 4; i++) {
+        const boat = new THREE.Mesh(boatGeometry, boatMaterial);
+        boat.position.set(-60 + i * 40, 25, -28);
+        boat.castShadow = true;
+        boat.name = 'Lifeboats';
+
+        const davitGeometry = new THREE.CylinderGeometry(1, 1, 15, 8);
+        const davitMaterial = new THREE.MeshStandardMaterial({
+          color: 0x7f8c8d,
+          metalness: 0.8,
+          roughness: 0.2
+        });
+        const davit = new THREE.Mesh(davitGeometry, davitMaterial);
+        davit.position.set(-60 + i * 40, 32, -22);
+        davit.rotation.z = 0.3;
+        group.add(davit);
+
+        group.add(boat);
+      }
+
+      addComponentGroup('Lifeboats', group, parent);
+    }
+
+    function createCranes(parent) {
+      const group = new THREE.Group();
+      group.name = 'Cranes_Group';
+
+      // Main crane
+      const craneMast = new THREE.CylinderGeometry(2, 3, 50, 8);
+      const craneMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf1c40f,
+        metalness: 0.6,
+        roughness: 0.4
+      });
+      const mast = new THREE.Mesh(craneMast, craneMaterial);
+      mast.position.set(-20, 40, 0);
+      mast.castShadow = true;
+      mast.name = 'Cranes';
+
+      // Crane jib
+      const jibGeometry = new THREE.BoxGeometry(60, 3, 3);
+      const jib = new THREE.Mesh(jibGeometry, craneMaterial);
+      jib.position.set(10, 60, 0);
+      jib.castShadow = true;
+      jib.name = 'Cranes';
+
+      // Counterweight
+      const counterGeometry = new THREE.BoxGeometry(8, 8, 8);
+      const counter = new THREE.Mesh(counterGeometry, craneMaterial);
+      counter.position.set(-50, 58, 0);
+      counter.castShadow = true;
+      counter.name = 'Cranes';
+
+      group.add(mast, jib, counter);
+      addComponentGroup('Cranes', group, parent);
+    }
+
+    function createSelectionIndicators() {
+      // Selection arrow
+      const arrowGeometry = new THREE.ConeGeometry(3, 8, 8);
+      const arrowMaterial = new THREE.MeshBasicMaterial({
+        color: 0x0066cc,
+        transparent: true,
+        opacity: 0.8
+      });
+      selectionArrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+      selectionArrow.visible = false;
+      scene.add(selectionArrow);
+
+      // Highlight outline
+      const outlineGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+      const outlineMaterial = new THREE.LineBasicMaterial({
+        color: 0x0066cc,
+        linewidth: 3,
+        transparent: true,
+        opacity: 0.8
+      });
+      highlightOutline = new THREE.LineSegments(outlineGeometry, outlineMaterial);
+      highlightOutline.visible = false;
+      scene.add(highlightOutline);
+    }
+
+    function addComponentGroup(name, group, parent) {
+      componentGroups[name] = group;
+      components[name] = group.children.find(child => child.name === name) || group.children[0];
+      parent.add(group);
+    }
+
+    function populateComponentSelect() {
+      const select = document.getElementById('componentSelect');
+      const names = {
+        'Hull': 'Casco (Hull)',
+        'Topsides': 'Convés Principal',
+        'Accommodation': 'Acomodações',
+        'Helideck': 'Heliporto',
+        'Turret': 'Torre de Amarração',
+        'Flare_System': 'Sistema de Flare',
+        'Processing_Modules': 'Módulos de Processamento',
+        'Offloading_System': 'Sistema de Transferência',
+        'Lifeboats': 'Botes Salva-vidas',
+        'Cranes': 'Guindastes'
+      };
+
+      Object.keys(componentGroups).forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = names[name] || name;
+        select.appendChild(option);
+      });
+    }
+
+    function onMouseMove(event) {
+      const mouse = new THREE.Vector2();
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(Object.values(components));
+      
+      if (intersects.length > 0) {
+        document.body.style.cursor = 'pointer';
+        
+        const indicator = document.getElementById('selectionIndicator');
+        indicator.style.display = 'block';
+        indicator.style.left = event.clientX + 10 + 'px';
+        indicator.style.top = event.clientY - 10 + 'px';
+      } else {
+        document.body.style.cursor = 'default';
+        document.getElementById('selectionIndicator').style.display = 'none';
+      }
+    }
+
+    function onMouseClick(event) {
+      const mouse = new THREE.Vector2();
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(Object.values(components));
+
+      if (intersects.length > 0) {
+        selectObject(intersects[0].object);
+      } else {
+        deselectObject();
+      }
+    }
+
+    function selectObject(object) {
+      if (selectedObject) {
+        selectedObject.material.emissive.setHex(0x000000);
+        window.highlightSpot.intensity = 0;
+        selectionArrow.visible = false;
+        highlightOutline.visible = false;
+      }
+
+      selectedObject = object;
+      object.material.emissive.setHex(0x222222);
+      
+      const box = new THREE.Box3().setFromObject(object);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      
+      selectionArrow.position.copy(center);
+      selectionArrow.position.y += size.y / 2 + 15;
+      selectionArrow.visible = true;
+      
+      const edges = new THREE.EdgesGeometry(object.geometry);
+      highlightOutline.geometry.dispose();
+      highlightOutline.geometry = edges;
+      highlightOutline.position.copy(object.position);
+      highlightOutline.rotation.copy(object.rotation);
+      highlightOutline.scale.copy(object.scale);
+      highlightOutline.visible = true;
+      
+      window.highlightSpot.target = object;
+      window.highlightSpot.intensity = 0.6;
+      
+      document.getElementById('componentSelect').value = object.name;
+      showInfo(object.name);
+      focusOnObject(object);
+    }
+
+    function deselectObject() {
+      if (selectedObject) {
+        selectedObject.material.emissive.setHex(0x000000);
+        selectedObject = null;
+        window.highlightSpot.intensity = 0;
+        selectionArrow.visible = false;
+        highlightOutline.visible = false;
+      }
+      document.getElementById('componentSelect').value = '';
+      document.getElementById('selectionIndicator').style.display = 'none';
+      closeInfo();
+    }
+
+    function showInfo(componentName) {
+      const info = getComponentInfo(componentName);
+      document.getElementById('infoTitle').textContent = info.title;
+      document.getElementById('infoDesc').textContent = info.description;
+      document.getElementById('componentStats').innerHTML = info.stats;
+      document.getElementById('info').style.display = 'block';
+    }
+
+    function getComponentInfo(name) {
+      const data = {
+        'Hull': {
+          title: 'Casco (Hull)',
+          description: 'Estrutura principal do FPSO construída em aço naval de alta resistência. Projetado para suportar cargas de petróleo, equipamentos e condições marítimas adversas por 25+ anos.',
+          stats: '• Comprimento: 300m<br>• Largura: 50m<br>• Altura: 25m<br>• Capacidade: 2.0M barris<br>• Material: Aço A514<br>• Peso: 85,000 ton'
+        },
+        'Topsides': {
+          title: 'Convés Principal (Topsides)',
+          description: 'Plataforma superior que suporta todos os equipamentos de processo, utilidades e sistemas de segurança. Área de trabalho principal da operação.',
+          stats: '• Área: 12,600 m²<br>• Carga útil: 45,000 ton<br>• Material: Aço estrutural<br>• Revestimento: Anti-slip<br>• Drenagem: Sistema completo'
+        },
+        'Accommodation': {
+          title: 'Módulo de Acomodações',
+          description: 'Complexo residencial para 180 pessoas com cabines, refeitório, enfermaria, recreação e sistemas de suporte à vida. Projetado para conforto em alto mar.',
+          stats: '• Capacidade: 180 pessoas<br>• Cabines: 90 unidades<br>• Andares: 4 níveis<br>• Área: 1,200 m²<br>• HVAC: Sistema completo<br>• Segurança: Certificado SOLAS'
+        },
+        'Helideck': {
+          title: 'Heliporto (Helideck)',
+          description: 'Plataforma de pouso para helicópteros até 15 toneladas, equipada com sistemas de combate a incêndio, iluminação noturna e equipamentos de emergência.',
+          stats: '• Diâmetro: 36m<br>• Carga máx: 15 ton<br>• Material: Alumínio<br>• Iluminação: LED completa<br>• Combate incêndio: Foam/água<br>• Certificação: CAP 437'
+        },
+        'Turret': {
+          title: 'Sistema de Amarração (Turret)',
+          description: 'Torre central de amarração permitindo rotação 360° do FPSO conforme vento e corrente. Inclui 8 linhas de ancoragem e swivel para fluidos.',
+          stats: '• Diâmetro: 30m<br>• Profundidade: 40m<br>• Linhas âncora: 8 unidades<br>• Capacidade: 2,000 ton<br>• Rotação: 360° contínua<br>• Swivel: 12 passagens'
+        },
+        'Flare_System': {
+          title: 'Sistema de Flare',
+          description: 'Torre de queima para gases de emergência e operação. Inclui sistema de ignição, queimadores piloto e monitoramento remoto de chama.',
+          stats: '• Altura: 60m<br>• Capacidade: 500 MMSCF/D<br>• Braço: 40m<br>• Material: Inconel 625<br>• Ignição: Automática<br>• Eficiência: >98%'
+        },
+        'Processing_Modules': {
+          title: 'Módulos de Processamento',
+          description: 'Conjunto integrado de equipamentos para separação óleo/gás/água, tratamento, compressão e condicionamento dos hidrocarbonetos produzidos.',
+          stats: '• Capacidade óleo: 180,000 bpd<br>• Capacidade gás: 350 MMSCF/D<br>• Separadores: 3 estágios<br>• Compressores: 4 trens<br>• Tratamento água: 95% efic.<br>• Automação: DCS completo'
+        },
+        'Offloading_System': {
+          title: 'Sistema de Transferência',
+          description: 'Sistema de carregamento de navios tanque através de braços articulados ou mangueiras flutuantes. Permite operação com ondas até 3.5m.',
+          stats: '• Taxa transfer: 12,000 m³/h<br>• Braços: 2 unidades<br>• Comprimento: 25m cada<br>• Operação: Hs até 3.5m<br>• Pressão: 16 bar<br>• Material: Aço inox'
+        },
+        'Lifeboats': {
+          title: 'Botes Salva-vidas',
+          description: 'Sistema de abandono com 8 botes salva-vidas totalmente fechados, cada um com capacidade para 25 pessoas. Equipados com suprimentos para 10 dias.',
+          stats: '• Quantidade: 8 botes<br>• Capacidade: 25 pessoas cada<br>• Suprimentos: 10 dias<br>• Propulsão: Motor diesel<br>• Lançamento: Davits<br>• Certificação: SOLAS/LSA'
+        },
+        'Cranes': {
+          title: 'Guindastes',
+          description: 'Guindastes de convés para movimentação de equipamentos, suprimentos e operações de manutenção. Capacidade até 100 toneladas com alcance de 60 metros.',
+          stats: '• Capacidade: 100 ton<br>• Alcance: 60m<br>• Altura: 50m<br>• Rotação: 360°<br>• Controle: Remoto<br>• Certificação: API 2C'
+        }
+      };
+
+      return data[name] || { 
+        title: name, 
+        description: 'Componente do sistema FPSO.',
+        stats: 'Informações técnicas não disponíveis.'
+      };
+    }
+
+    // Global Functions
+    window.resetCamera = function() {
+      camera.position.set(600, 200, 600);
+      controls.target.set(0, 0, 0);
+      controls.update();
+      deselectObject();
+    }
+
+    window.toggleWireframe = function() {
+      wireframeMode = !wireframeMode;
+      Object.values(componentGroups).forEach(group => {
+        group.traverse((child) => {
+          if (child.isMesh && child.material) {
+            child.material.wireframe = wireframeMode;
+          }
+        });
+      });
+    }
+
+    window.selectComponent = function(name) {
+      if (!name) {
+        deselectObject();
+        return;
+      }
+      const component = components[name];
+      if (component) {
+        selectObject(component);
+      }
+    }
+
+    window.toggleAnimation = function() {
+      animationRunning = !animationRunning;
+      const btn = document.getElementById('animBtn');
+      const status = document.getElementById('animStatus');
+      
+      if (animationRunning) {
+        btn.textContent = '⏸️ Stop Animation';
+        status.classList.add('active');
+      } else {
+        btn.textContent = '▶️ Start Animation';
+        status.classList.remove('active');
+      }
+    }
+
+    window.closeInfo = function() {
+      document.getElementById('info').style.display = 'none';
+    }
+
+    function focusOnObject(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const distance = maxDim * 3;
+      
+      controls.target.copy(center);
+      
+      const startPos = camera.position.clone();
+      const endPos = center.clone();
+      endPos.z += distance;
+      endPos.y += distance * 0.5;
+      
+      const duration = 1500;
+      const startTime = Date.now();
+      
+      function animateCamera() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        
+        camera.position.lerpVectors(startPos, endPos, easeProgress);
+        controls.update();
+        
+        if (progress < 1) {
+          requestAnimationFrame(animateCamera);
+        }
+      }
+      
+      animateCamera();
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const time = Date.now() * 0.001;
+
+      if (animationRunning) {
+        // Ocean wave animation
+        if (ocean) {
+          const positions = ocean.geometry.attributes.position;
+          for (let i = 0; i < positions.count; i++) {
+            const x = positions.getX(i);
+            const z = positions.getZ(i);
+            const wave = Math.sin(x * 0.01 + time) * Math.cos(z * 0.01 + time * 0.5) * 2;
+            positions.setY(i, wave);
+          }
+          positions.needsUpdate = true;
+        }
+
+        // Crane rotation
+        const craneGroup = componentGroups['Cranes'];
+        if (craneGroup) {
+          craneGroup.rotation.y = Math.sin(time * 0.3) * 0.5;
+        }
+
+        // Flare flame effect
+        const flareGroup = componentGroups['Flare_System'];
+        if (flareGroup) {
+          flareGroup.traverse((child) => {
+            if (child.material && child.material.emissive) {
+              const intensity = 0.3 + Math.sin(time * 8) * 0.2;
+              child.material.emissiveIntensity = intensity;
+            }
+          });
+        }
+
+        // Helideck rotation lights
+        const heliGroup = componentGroups['Helideck'];
+        if (heliGroup) {
+          heliGroup.rotation.y = time * 0.1;
+        }
+
+        // FPSO gentle rocking motion
+        const mainGroup = scene.getObjectByName('FPSO_System');
+        if (mainGroup) {
+          mainGroup.rotation.x = Math.sin(time * 0.5) * 0.02;
+          mainGroup.rotation.z = Math.cos(time * 0.3) * 0.015;
+          mainGroup.position.y = Math.sin(time * 0.8) * 2;
+        }
+      }
+
+      // Selection arrow animation
+      if (selectionArrow.visible) {
+        selectionArrow.rotation.y = time * 2;
+        selectionArrow.position.y += Math.sin(time * 4) * 0.5;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Debug helpers
+    window.FPSOModel = {
+      components: components,
+      componentGroups: componentGroups,
+      selectByName: (name) => window.selectComponent(name),
+      listComponents: () => console.log(Object.keys(components)),
+      scene: scene,
+      camera: camera,
+      renderer: renderer
+    };
+
+    console.log('FPSO Model loaded successfully!');
+    console.log('Available components:', Object.keys(components));
+  </script>
+</body>
+</html>
