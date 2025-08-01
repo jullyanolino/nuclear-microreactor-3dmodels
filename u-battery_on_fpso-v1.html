@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FPSO and U-Battery Model Visualization</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+      border-radius: 5px;
+    }
+    #info-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+      border-radius: 5px;
+      display: none;
+      max-width: 300px;
+    }
+    button, select {
+      margin: 5px;
+      padding: 5px;
+      cursor: pointer;
+    }
+    #scene-container {
+      width: 100%;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <h2>🔬 FPSO & U-Battery Controls</h2>
+    <button id="resetCamera">🎯 Reset Camera</button><br>
+    <button id="toggleWireframe">📐 Toggle Wireframe</button><br>
+    <button id="toggleContainment">🛡️ Toggle Containment Vessel</button><br>
+    <select id="componentSelect">
+      <option value="">Select a component...</option>
+      <option value="Hull">Hull</option>
+      <option value="Topsides">Topsides</option>
+      <option value="SeparatorModule">Separator Module</option>
+      <option value="FlareBoom">Flare Boom</option>
+      <option value="CoolingTower">Cooling Tower</option>
+      <option value="Turret">Turret</option>
+      <option value="AnchoringSystem">Anchoring System</option>
+      <option value="OffloadingSystem">Offloading System</option>
+      <option value="AccommodationBlock">Accommodation Block</option>
+      <option value="Helideck">Helideck</option>
+      <option value="UBattery">U-Battery</option>
+      <option value="ContainmentVessel">Containment Vessel</option>
+      <option value="ReactorCore">Reactor Core</option>
+      <option value="HeatExchanger">Heat Exchanger</option>
+      <option value="CoolantPump">Coolant Pump</option>
+    </select><br>
+    <button id="startAnimation">▶️ Start Animation</button><br>
+    <label><input type="checkbox" id="enableCrossSection"> ✂️ Enable Cross-Section</label><br>
+    <label>Cross-Section Position: <input type="range" id="crossSectionPos" min="-150" max="150" value="0"></label><br>
+  </div>
+  <div id="info-panel">
+    <h3 id="componentName">Component</h3>
+    <p id="componentInfo">Click a component to see information.</p>
+    <button id="closeInfo">✖️ Close</button>
+  </div>
+  <div id="scene-container"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script>
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('scene-container').appendChild(renderer.domElement);
+
+    // Orbit controls
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x404040, 2);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    directionalLight.position.set(100, 100, 100);
+    scene.add(directionalLight);
+
+    // Materials
+    const materials = {
+      hullSteel: new THREE.MeshStandardMaterial({ color: 0x4682b4, roughness: 0.5, metalness: 0.8 }),
+      industrial: new THREE.MeshStandardMaterial({ color: 0x696969, roughness: 0.7, metalness: 0.6 }),
+      flare: new THREE.MeshStandardMaterial({ color: 0xff4500, roughness: 0.4, metalness: 0.9 }),
+      cooling: new THREE.MeshStandardMaterial({ color: 0x708090, roughness: 0.6, metalness: 0.7 }),
+      turret: new THREE.MeshStandardMaterial({ color: 0x2f4f4f, roughness: 0.5, metalness: 0.8 }),
+      cable: new THREE.LineBasicMaterial({ color: 0x000000 }),
+      transfer: new THREE.MeshStandardMaterial({ color: 0x9acd32, roughness: 0.6, metalness: 0.7 }),
+      housing: new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.8, metalness: 0.3 }),
+      helipad: new THREE.MeshStandardMaterial({ color: 0x00ff00, roughness: 0.9, metalness: 0.2 }),
+      containment: new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.5, metalness: 0.7 }),
+      reactor: new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.6, metalness: 0.8 }),
+      exchanger: new THREE.MeshStandardMaterial({ color: 0x00b7eb, roughness: 0.6, metalness: 0.7 }),
+      pump: new THREE.MeshStandardMaterial({ color: 0xdda0dd, roughness: 0.6, metalness: 0.7 })
+    };
+
+    // Component descriptions
+    const componentDescriptions = {
+      Hull: "The main floating structure of the FPSO, providing buoyancy and stability.",
+      Topsides: "The upper deck containing processing facilities and equipment.",
+      SeparatorModule: "Separates oil, gas, and water from the produced fluids.",
+      FlareBoom: "Burns off excess gas safely, extending from the topsides.",
+      CoolingTower: "Cools process fluids to maintain operational efficiency.",
+      Turret: "Allows the FPSO to rotate around a fixed mooring point.",
+      AnchoringSystem: "Secures the FPSO to the seabed with anchor lines.",
+      OffloadingSystem: "Facilitates the transfer of oil to shuttle tankers.",
+      AccommodationBlock: "Housing for crew members with living quarters.",
+      Helideck: "Platform for helicopter landings and takeoffs.",
+      UBattery: "Compact nuclear reactor system placed on the FPSO deck for power generation.",
+      ContainmentVessel: "Protective structure housing the U-Battery's internal components.",
+      ReactorCore: "The core of the U-Battery where nuclear fission occurs.",
+      HeatExchanger: "Transfers heat from the reactor to generate steam or power.",
+      CoolantPump: "Circulates coolant to manage reactor temperature."
+    };
+
+    // FPSO Model
+    const fpso = new THREE.Group();
+    fpso.name = "FPSO_Model";
+
+    // Hull
+    const hullGeometry = new THREE.BoxGeometry(300, 25, 50);
+    const hull = new THREE.Mesh(hullGeometry, materials.hullSteel);
+    hull.name = "Hull";
+    fpso.add(hull);
+
+    // Topsides
+    const topsides = new THREE.Group();
+    topsides.name = "Topsides";
+    topsides.position.set(0, 13, 0);
+    const separatorGeometry = new THREE.BoxGeometry(40, 10, 15);
+    const separator = new THREE.Mesh(separatorGeometry, materials.industrial);
+    separator.name = "SeparatorModule";
+    separator.position.set(20, 0, 0);
+    topsides.add(separator);
+    const flareGeometry = new THREE.BoxGeometry(40, 3, 3);
+    const flare = new THREE.Mesh(flareGeometry, materials.flare);
+    flare.name = "FlareBoom";
+    flare.position.set(140, 20, 0);
+    flare.rotation.z = 0.3;
+    topsides.add(flare);
+    const coolingGeometry = new THREE.CylinderGeometry(8, 8, 15, 32);
+    const cooling = new THREE.Mesh(coolingGeometry, materials.cooling);
+    cooling.name = "CoolingTower";
+    cooling.position.set(-80, 0, 20);
+    topsides.add(cooling);
+
+    // U-Battery on Topsides
+    const uBattery = new THREE.Group();
+    uBattery.name = "UBattery";
+    uBattery.position.set(60, 5, 10); // Position on deck near SeparatorModule
+    const containmentGeometry = new THREE.CylinderGeometry(10, 10, 20, 32);
+    const containment = new THREE.Mesh(containmentGeometry, materials.containment);
+    containment.name = "ContainmentVessel";
+    uBattery.add(containment);
+    const reactorGeometry = new THREE.SphereGeometry(4, 32, 32);
+    const reactor = new THREE.Mesh(reactorGeometry, materials.reactor);
+    reactor.name = "ReactorCore";
+    reactor.position.set(0, 0, 0);
+    uBattery.add(reactor);
+    const exchangerGeometry = new THREE.BoxGeometry(5, 10, 5);
+    const exchanger = new THREE.Mesh(exchangerGeometry, materials.exchanger);
+    exchanger.name = "HeatExchanger";
+    exchanger.position.set(5, 0, 0);
+    uBattery.add(exchanger);
+    const pumpGeometry = new THREE.CylinderGeometry(3, 3, 8, 32);
+    const pump = new THREE.Mesh(pumpGeometry, materials.pump);
+    pump.name = "CoolantPump";
+    pump.position.set(-5, 0, 0);
+    uBattery.add(pump);
+    topsides.add(uBattery);
+
+    fpso.add(topsides);
+
+    // Turret
+    const turretGeometry = new THREE.CylinderGeometry(12, 12, 35, 32);
+    const turret = new THREE.Mesh(turretGeometry, materials.turret);
+    turret.name = "Turret";
+    turret.position.set(-140, 0, 0);
+    fpso.add(turret);
+
+    // Anchoring System
+    const anchoring = new THREE.Group();
+    anchoring.name = "AnchoringSystem";
+    anchoring.position.set(-140, -20, 0);
+    const anchorLine1Geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(-50, -100, -50)
+    ]);
+    const anchorLine1 = new THREE.Line(anchorLine1Geometry, materials.cable);
+    anchorLine1.name = "AnchorLine1";
+    anchoring.add(anchorLine1);
+    const anchorLine2Geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(-50, -100, 50)
+    ]);
+    const anchorLine2 = new THREE.Line(anchorLine2Geometry, materials.cable);
+    anchorLine2.name = "AnchorLine2";
+    anchoring.add(anchorLine2);
+    fpso.add(anchoring);
+
+    // Offloading System
+    const offloading = new THREE.Group();
+    offloading.name = "OffloadingSystem";
+    offloading.position.set(150, 10, 0);
+    const offloadingArmGeometry = new THREE.BoxGeometry(15, 2, 2);
+    const offloadingArm = new THREE.Mesh(offloadingArmGeometry, materials.transfer);
+    offloadingArm.name = "OffloadingArm";
+    offloadingArm.position.set(5, 0, 0);
+    offloadingArm.rotation.y = 0.3;
+    offloading.add(offloadingArm);
+    fpso.add(offloading);
+
+    // Accommodation Block
+    const accommodationGeometry = new THREE.BoxGeometry(25, 20, 20);
+    const accommodation = new THREE.Mesh(accommodationGeometry, materials.housing);
+    accommodation.name = "AccommodationBlock";
+    accommodation.position.set(-100, 25, 0);
+    fpso.add(accommodation);
+
+    // Helideck
+    const helideckGeometry = new THREE.CylinderGeometry(12, 12, 1, 32);
+    const helideck = new THREE.Mesh(helideckGeometry, materials.helipad);
+    helideck.name = "Helideck";
+    helideck.position.set(-100, 36, 0);
+    fpso.add(helideck);
+
+    scene.add(fpso);
+
+    // Camera positioning
+    camera.position.set(200, 100, 200);
+    controls.target.set(0, 0, 0);
+
+    // Animation
+    let isAnimating = false;
+    function animate() {
+      requestAnimationFrame(animate);
+      if (isAnimating) {
+        fpso.rotation.y += 0.005;
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Controls
+    document.getElementById('resetCamera').addEventListener('click', () => {
+      camera.position.set(200, 100, 200);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    });
+
+    document.getElementById('toggleWireframe').addEventListener('click', () => {
+      fpso.traverse(obj => {
+        if (obj.isMesh) {
+          obj.material.wireframe = !obj.material.wireframe;
+        }
+      });
+    });
+
+    document.getElementById('toggleContainment').addEventListener('click', () => {
+      const containment = fpso.getObjectByName('ContainmentVessel');
+      if (containment) {
+        containment.visible = !containment.visible;
+      }
+    });
+
+    document.getElementById('startAnimation').addEventListener('click', () => {
+      isAnimating = !isAnimating;
+      document.getElementById('startAnimation').textContent = isAnimating ? '⏸️ Pause Animation' : '▶️ Start Animation';
+    });
+
+    // Cross-section
+    const crossSectionPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+    renderer.clippingPlanes = [];
+    document.getElementById('enableCrossSection').addEventListener('change', (e) => {
+      renderer.clippingPlanes = e.target.checked ? [crossSectionPlane] : [];
+    });
+    document.getElementById('crossSectionPos').addEventListener('input', (e) => {
+      crossSectionPlane.constant = parseFloat(e.target.value);
+    });
+
+    // Component selection
+    function updateInfoPanel(componentName) {
+      const infoPanel = document.getElementById('info-panel');
+      const componentNameDisplay = document.getElementById('componentName');
+      const componentInfo = document.getElementById('componentInfo');
+      if (componentName) {
+        const description = componentDescriptions[componentName] || "No description available.";
+        componentNameDisplay.textContent = componentName;
+        componentInfo.textContent = description;
+        infoPanel.style.display = 'block';
+      } else {
+        infoPanel.style.display = 'none';
+      }
+    }
+
+    document.getElementById('componentSelect').addEventListener('change', (e) => {
+      updateInfoPanel(e.target.value);
+    });
+
+    document.getElementById('closeInfo').addEventListener('click', () => {
+      document.getElementById('info-panel').style.display = 'none';
+      document.getElementById('componentSelect').value = '';
+    });
+
+    // Raycaster for clicking components
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    window.addEventListener('click', (event) => {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(fpso.children, true);
+      if (intersects.length > 0) {
+        let component = intersects[0].object;
+        // Traverse up to find the topmost named component
+        while (component && !componentDescriptions[component.name] && component.parent) {
+          component = component.parent;
+        }
+        if (componentDescriptions[component.name]) {
+          document.getElementById('componentSelect').value = component.name;
+          updateInfoPanel(component.name);
+        }
+      }
+    });
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
